@@ -1,0 +1,45 @@
+﻿apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: k8srequiredsecuritycontext
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sRequiredSecurityContext
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package k8srequiredsecuritycontext
+
+        all_containers[c] { c := input.review.object.spec.containers[_] }
+        all_containers[c] { c := input.review.object.spec.initContainers[_] }
+        all_containers[c] { c := input.review.object.spec.ephemeralContainers[_] }
+
+        pod_run_as_non_root {
+          input.review.object.spec.securityContext.runAsNonRoot == true
+        }
+
+        violation[{"msg": msg}] {
+          not pod_run_as_non_root
+          c := all_containers[_]
+          not (c.securityContext.runAsNonRoot == true)
+          msg := sprintf("runAsNonRoot: true обязателен (pod-level или container-level). Проблемный container=%v", [c.name])
+        }
+
+        violation[{"msg": msg}] {
+          input.review.object.spec.securityContext.runAsUser == 0
+          msg := "runAsUser=0 (root) запрещён на Pod уровне"
+        }
+
+        violation[{"msg": msg}] {
+          c := all_containers[_]
+          c.securityContext.runAsUser == 0
+          msg := sprintf("runAsUser=0 (root) запрещён (container=%v)", [c.name])
+        }
+
+        violation[{"msg": msg}] {
+          c := all_containers[_]
+          not (c.securityContext.readOnlyRootFilesystem == true)
+          msg := sprintf("readOnlyRootFilesystem: true обязателен (container=%v)", [c.name])
+        }
