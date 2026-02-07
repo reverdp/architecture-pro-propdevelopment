@@ -1,0 +1,19 @@
+﻿apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: k8sdenyhostpath
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sDenyHostPath
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package k8sdenyhostpath
+
+        violation[{"msg": msg}] {
+          v := input.review.object.spec.volumes[_]
+          v.hostPath
+          msg := sprintf("hostPath volume запрещён (volume=%v)", [v.name])
+        }
